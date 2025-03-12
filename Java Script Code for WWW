@@ -1,0 +1,179 @@
+class MusicAssistantCustomCard extends HTMLElement {
+  set hass(hass) {
+    if (!this.content) {
+      const scale = this.config.scale || 1;
+      this.innerHTML = `
+        <ha-card style="border-radius: ${16 * scale}px; box-shadow: none; overflow: hidden; position: relative; width: ${300 * scale}px; height: ${370 * scale}px; background-color: #ADD8E6; display: flex; flex-direction: column;">
+          <div class="album-art" style="width: 100%; height: ${270 * scale}px; background-size: contain; background-repeat: no-repeat; background-position: center; flex-shrink: 0;"></div>
+          <div class="volume-controls" style="position: absolute; top: ${20 * scale}px; right: ${20 * scale}px; display: flex; gap: ${8 * scale}px;">
+            <ha-icon id="vol-down" icon="mdi:volume-minus" style="cursor: pointer; padding: ${4 * scale}px; border-radius: 50%; color: white; background: rgba(0, 0, 60, 0.5);"></ha-icon>
+            <ha-icon id="vol-mute" icon="mdi:volume-off" style="cursor: pointer; padding: ${4 * scale}px; border-radius: 50%; color: white; background: rgba(0, 0, 60, 0.5);"></ha-icon>
+            <ha-icon id="vol-up" icon="mdi:volume-plus" style="cursor: pointer; padding: ${4 * scale}px; border-radius: 50%; color: white; background: rgba(0, 0, 60, 0.5);"></ha-icon>
+          </div>
+          <div class="card-content" style="padding: ${8 * scale}px ${16 * scale}px ${8 * scale}px; background: rgba(0, 0, 60, 0.7); display: flex; flex-direction: column; align-items: center; flex-shrink: 0; height: ${100 * scale}px;">
+            <div class="text-content" style="color: white; font-size: ${16 * scale}px; text-align: left; width: 100%; margin-top: ${10 * scale}px;">
+              <div id="track-title" style="white-space: nowrap; display: inline-block; height: ${20 * scale}px; line-height: ${20 * scale}px; overflow: hidden;"></div>
+              <div id="artist" style="white-space: nowrap; display: inline-block; height: ${20 * scale}px; line-height: ${20 * scale}px; overflow: hidden;"></div>
+            </div>
+            <div style="display: flex; justify-content: center; align-items: center; gap: ${10 * scale}px; margin-top: ${5 * scale}px;">
+              <ha-icon id="prev" icon="mdi:skip-previous" style="cursor: pointer; padding: ${8 * scale}px; border-radius: 50%; color: white; background: rgba(0, 0, 0, 0);"></ha-icon>
+              <ha-icon id="play-pause" icon="mdi:play" style="cursor: pointer; padding: ${8 * scale}px; border-radius: 50%; color: white; background: rgba(0, 0, 0, 0);"></ha-icon>
+              <ha-icon id="next" icon="mdi:skip-next" style="cursor: pointer; padding: ${8 * scale}px; border-radius: 50%; color: white; background: rgba(0, 0, 0, 0);"></ha-icon>
+              <ha-icon id="shuffle" icon="mdi:shuffle-disabled" style="cursor: pointer; padding: ${8 * scale}px; border-radius: 50%; color: white; background: rgba(0, 0, 0, 0);"></ha-icon>
+              <ha-icon id="browse" icon="mdi:play-box-outline" style="cursor: pointer; padding: ${8 * scale}px; border-radius: 50%; color: white; background: rgba(0, 0, 0, 0);"></ha-icon>
+            </div>
+          </div>
+          <style>
+            @keyframes scroll {
+              0% { transform: translateX(100%); }
+              100% { transform: translateX(-100%); }
+            }
+            #track-title, #artist {
+              animation: scroll 10s linear infinite;
+            }
+          </style>
+        </ha-card>
+      `;
+      this.content = this.querySelector(".card-content");
+      this.setupButtons(hass);
+
+      // Initialize auto-scroll for long text
+      this.checkAndApplyScroll();
+
+      // Add hover effects
+      const icons = this.querySelectorAll("ha-icon");
+      icons.forEach(icon => {
+        icon.addEventListener("mouseover", () => {
+          icon.style.backgroundColor = "rgba(255, 255, 255, 0.2)";
+        });
+        icon.addEventListener("mouseout", () => {
+          icon.style.backgroundColor = "transparent";
+        });
+      });
+    }
+
+    const entityId = this.config.entity;
+    const state = hass.states[entityId];
+    const scale = this.config.scale || 1;
+    const albumArtDiv = this.querySelector(".album-art");
+    if (state) {
+      albumArtDiv.style.backgroundImage = `url(${state.attributes.entity_picture || ""})`;
+      this.querySelector("#track-title").textContent = state.attributes.media_title || "No Track Playing";
+      this.querySelector("#artist").textContent = state.attributes.media_artist || "Unknown Artist";
+      const playPauseBtn = this.querySelector("#play-pause");
+      playPauseBtn.icon = state.state === "playing" ? "mdi:pause" : "mdi:play";
+      const shuffleBtn = this.querySelector("#shuffle");
+      shuffleBtn.icon = state.attributes.shuffle === true ? "mdi:shuffle" : "mdi:shuffle-disabled";
+      this.checkAndApplyScroll(); // Re-check scroll on state update
+    } else {
+      albumArtDiv.style.backgroundImage = `none`; // Reverts to default light blue
+      this.querySelector("#track-title").textContent = "No Track Playing";
+      this.querySelector("#artist").textContent = "Unknown Artist";
+      this.querySelector("#play-pause").icon = "mdi:play";
+      this.querySelector("#shuffle").icon = "mdi:shuffle-disabled";
+      this.checkAndApplyScroll(); // Re-check scroll on no state
+    }
+  }
+
+  setupButtons(hass) {
+    const entityId = this.config.entity;
+
+    this.querySelector("#play-pause").onclick = () => {
+      console.log(`Entity: ${entityId}, Current State: ${hass.states[entityId]?.state}`);
+      hass.callService("media_player", "media_play_pause", { entity_id: entityId })
+        .then(() => console.log("media_play_pause service called successfully"))
+        .catch(err => console.error("media_play_pause error:", err));
+    };
+
+    this.querySelector("#prev").onclick = () =>
+      hass.callService("media_player", "media_previous_track", { entity_id: entityId });
+    this.querySelector("#next").onclick = () =>
+      hass.callService("media_player", "media_next_track", { entity_id: entityId });
+    this.querySelector("#vol-down").onclick = () =>
+      hass.callService("media_player", "volume_down", { entity_id: entityId });
+    this.querySelector("#vol-up").onclick = () =>
+      hass.callService("media_player", "volume_up", { entity_id: entityId });
+
+    // Toggle mute state
+    const volMuteBtn = this.querySelector("#vol-mute");
+    volMuteBtn.onclick = () => {
+      const currentState = hass.states[entityId];
+      const isMuted = currentState?.attributes.is_volume_muted || false;
+      const newMuteState = !isMuted;
+      console.log(`Entity: ${entityId}, Toggling mute to: ${newMuteState}`);
+      hass.callService("media_player", "volume_mute", { 
+        entity_id: entityId, 
+        is_volume_muted: newMuteState 
+      })
+        .then(() => console.log(`Mute set to ${newMuteState} successfully`))
+        .catch(err => console.error("volume_mute error:", err));
+    };
+
+    // Shuffle toggle
+    const shuffleBtn = this.querySelector("#shuffle");
+    shuffleBtn.onclick = () => {
+      const currentState = hass.states[entityId];
+      const currentShuffle = currentState?.attributes.shuffle || false;
+      const newShuffle = !currentShuffle;
+      console.log(`Entity: ${entityId}, Current shuffle state: ${currentShuffle}, Toggling shuffle to: ${newShuffle}`);
+      hass.callService("media_player", "shuffle_set", { 
+        entity_id: entityId, 
+        shuffle: newShuffle 
+      })
+        .then(() => {
+          console.log(`Shuffle set to ${newShuffle} successfully`);
+          shuffleBtn.icon = newShuffle ? "mdi:shuffle" : "mdi:shuffle-disabled";
+        })
+        .catch(err => console.error("shuffle_set error:", err));
+    };
+
+    this.querySelector("#browse").onclick = () => {
+      this.fireEvent("hass-more-info", { entityId });
+    };
+  }
+
+  checkAndApplyScroll() {
+    const trackTitle = this.querySelector("#track-title");
+    const artist = this.querySelector("#artist");
+    const containerWidth = this.querySelector(".text-content").offsetWidth;
+
+    // Check if text exceeds container width and apply animation
+    if (trackTitle.scrollWidth > containerWidth) {
+      trackTitle.style.animation = "scroll 10s linear infinite";
+    } else {
+      trackTitle.style.animation = "none";
+    }
+
+    if (artist.scrollWidth > containerWidth) {
+      artist.style.animation = "scroll 10s linear infinite";
+    } else {
+      artist.style.animation = "none";
+    }
+  }
+
+  fireEvent(type, detail) {
+    const event = new Event(type, {
+      bubbles: true,
+      cancelable: false,
+      composed: true,
+    });
+    event.detail = detail;
+    this.dispatchEvent(event);
+  }
+
+  setConfig(config) {
+    if (!config.entity) {
+      throw new Error("You must define an entity");
+    }
+    this.config = config;
+  }
+
+  static getStubConfig() {
+    return { 
+      entity: "media_player.not_this_one_livingroom_chromecast",
+      scale: 1 
+    };
+  }
+}
+
+customElements.define("music-assistant-custom-card", MusicAssistantCustomCard);
