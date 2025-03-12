@@ -10,8 +10,8 @@ Installation instructions:  (assumes you are using Studio Code Server)
 First open Studio Code Server and find the WWW directory.  
 Right click on WWW and create the File: music-assistant-controls.js
 This will open up a blank file.  
+Now copy the contents of Java Script Code for WWW to this blank file.  Do not save yet.
 
-Copy the following code into that file.  
 
 
 
